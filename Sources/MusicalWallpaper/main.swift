@@ -60,6 +60,16 @@ private final class VisualizerView: NSView {
     private var shuttleStartY: CGFloat = 0
     private var shuttleStartZ: CGFloat = 0
     private var tickerScroll: CGFloat = 0
+    var isShuttleEnabled: Bool = true {
+        didSet {
+            if !isShuttleEnabled {
+                isShuttleFlying = false
+                shuttleNode?.position = SCNVector3(100, 100, 100)
+                shuttleWaitTimer = 10.0
+            }
+            needsDisplay = true
+        }
+    }
     private let modelBaseY: CGFloat = 0.56
     private let modelBaseZ: CGFloat = -1.18
     private let modelDepthDrift: CGFloat = 0.18
@@ -69,6 +79,7 @@ private final class VisualizerView: NSView {
     private let greekTickerAlphabet: [Character] = Array("ΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩ")
     private lazy var greekTickerLoopLines: [String] = makeGreekTickerLoopLines(count: 140, length: 96)
     private let creditFont = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
+    private let shuttleTimerFont = NSFont.monospacedDigitSystemFont(ofSize: 24, weight: .bold)
     private let clockFont: NSFont = {
         let size: CGFloat = 72
         let preferredFonts = [
@@ -478,6 +489,7 @@ private final class VisualizerView: NSView {
 
     private func updateShuttleMotion(dt: TimeInterval) {
         guard let shuttleNode else { return }
+        guard isShuttleEnabled else { return }
         
         if !isShuttleFlying {
             shuttleWaitTimer -= dt
@@ -551,6 +563,7 @@ private final class VisualizerView: NSView {
         drawWireframeGlobes(in: context)
         drawBottomWaveform(in: context)
         drawSystemClock(in: context)
+        drawShuttleTimer(in: context)
         drawLeftGlyphTicker(in: context)
         drawRipples(in: context)
         drawSubtleCredit(in: context)
@@ -1438,6 +1451,37 @@ private final class VisualizerView: NSView {
         }
     }
 
+    private func drawShuttleTimer(in context: CGContext) {
+        guard isShuttleEnabled else { return }
+        
+        let rect = bounds
+        let isFlying = isShuttleFlying
+        let timeRemaining = isFlying ? shuttleFlightTimer : shuttleWaitTimer
+        
+        let minutes = Int(max(0, timeRemaining)) / 60
+        let seconds = Int(max(0, timeRemaining)) % 60
+        let sign = isFlying ? "T+" : "T-"
+        let text = String(format: "%@ %02d:%02d", sign, minutes, seconds)
+        
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: shuttleTimerFont,
+            .foregroundColor: NSColor.white.withAlphaComponent(0.85)
+        ]
+        
+        let size = (text as NSString).size(withAttributes: attrs)
+        let centerX = rect.minX + (rect.width * 0.27)
+        let clockY = rect.minY + (rect.height * 0.89)
+        let textY = clockY - 45
+        
+        let origin = CGPoint(x: centerX - (size.width * 0.5), y: textY - (size.height * 0.5))
+        
+        context.saveGState()
+        context.setBlendMode(.screen)
+        context.setShadow(offset: .zero, blur: 8, color: NSColor(calibratedRed: 0.18, green: 0.95, blue: 1.0, alpha: 0.8).cgColor)
+        (text as NSString).draw(at: origin, withAttributes: attrs)
+        context.restoreGState()
+    }
+
     private func drawSubtleCredit(in context: CGContext) {
         let rect = bounds
         let text = "zachbohl.com"
@@ -1533,6 +1577,12 @@ private final class WallpaperController {
     func setBackgroundMode(_ mode: BackgroundMode) {
         backgroundMode = mode
         applyBackgroundModeToWindows()
+    }
+
+    func setShuttleEnabled(_ enabled: Bool) {
+        for view in windows.values {
+            view.isShuttleEnabled = enabled
+        }
     }
 
     private func rebuildWindows() {
@@ -1897,9 +1947,11 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var statusItem: NSStatusItem?
     private var backgroundMode: BackgroundMode = .full
+    private var isShuttleEnabled: Bool = true
     private let modeMenuItem = NSMenuItem(title: "Audio Mode: Starting…", action: nil, keyEquivalent: "")
     private let backgroundModeMenuItem = NSMenuItem(title: "Background: Full", action: nil, keyEquivalent: "")
     private let overlayToggleMenuItem = NSMenuItem(title: "Enable Desktop Overlay", action: nil, keyEquivalent: "")
+    private let shuttleToggleMenuItem = NSMenuItem(title: "Disable Spaceship Flight", action: nil, keyEquivalent: "")
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -1943,6 +1995,11 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         overlayToggleMenuItem.keyEquivalent = "o"
         menu.addItem(overlayToggleMenuItem)
 
+        shuttleToggleMenuItem.action = #selector(toggleShuttleMode)
+        shuttleToggleMenuItem.target = self
+        shuttleToggleMenuItem.keyEquivalent = "s"
+        menu.addItem(shuttleToggleMenuItem)
+
         menu.addItem(.separator())
 
         let restartItem = NSMenuItem(title: "Restart Audio Capture", action: #selector(restartAudioCapture), keyEquivalent: "r")
@@ -1972,6 +2029,15 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         backgroundModeMenuItem.title = "Background: \(backgroundMode.rawValue)"
         overlayToggleMenuItem.title = backgroundMode == .overlay ? "Disable Desktop Overlay" : "Enable Desktop Overlay"
         overlayToggleMenuItem.state = backgroundMode == .overlay ? .on : .off
+        
+        shuttleToggleMenuItem.title = isShuttleEnabled ? "Disable Spaceship Flight" : "Enable Spaceship Flight"
+        shuttleToggleMenuItem.state = isShuttleEnabled ? .on : .off
+    }
+
+    @objc private func toggleShuttleMode() {
+        isShuttleEnabled.toggle()
+        wallpaperController.setShuttleEnabled(isShuttleEnabled)
+        updateBackgroundMenuItems()
     }
 
     @objc private func quitApp() {
