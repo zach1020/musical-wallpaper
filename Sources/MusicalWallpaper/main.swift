@@ -51,6 +51,14 @@ private final class VisualizerView: NSView {
     private var modelJumpOffset: CGFloat = 0
     private var modelJumpVelocity: CGFloat = 0
     private var modelDepthPhase: CGFloat = 0
+    private var shuttleView: SCNView?
+    private var shuttleNode: SCNNode?
+    private var shuttleWaitTimer: TimeInterval = 10.0
+    private var isShuttleFlying: Bool = false
+    private var shuttleFlightTimer: TimeInterval = 0
+    private var shuttleFlightDuration: TimeInterval = 20.0
+    private var shuttleStartY: CGFloat = 0
+    private var shuttleStartZ: CGFloat = 0
     private var tickerScroll: CGFloat = 0
     private let modelBaseY: CGFloat = 0.56
     private let modelBaseZ: CGFloat = -1.18
@@ -89,6 +97,7 @@ private final class VisualizerView: NSView {
         wantsLayer = true
         layer?.isOpaque = false
         setupModelView()
+        setupShuttleView()
         startRenderingLoop()
     }
 
@@ -103,6 +112,7 @@ private final class VisualizerView: NSView {
     override func layout() {
         super.layout()
         layoutModelView()
+        layoutShuttleView()
     }
 
     func setAudioLevel(_ level: CGFloat) {
@@ -152,6 +162,58 @@ private final class VisualizerView: NSView {
         addSubview(scnView)
         modelView = scnView
         layoutModelView()
+    }
+
+    private func setupShuttleView() {
+        let scnView = SCNView(frame: .zero)
+        scnView.wantsLayer = true
+        scnView.layer?.backgroundColor = NSColor.clear.cgColor
+        scnView.backgroundColor = .clear
+        scnView.antialiasingMode = .multisampling4X
+        scnView.allowsCameraControl = false
+        scnView.autoenablesDefaultLighting = false
+        scnView.rendersContinuously = true
+        scnView.isPlaying = true
+
+        let scene = SCNScene()
+        
+        let cameraNode = SCNNode()
+        cameraNode.camera = SCNCamera()
+        cameraNode.camera?.fieldOfView = 60
+        cameraNode.camera?.zNear = 0.1
+        cameraNode.camera?.zFar = 200
+        cameraNode.position = SCNVector3(0, 0, 10)
+        scene.rootNode.addChildNode(cameraNode)
+
+        let ambientLightNode = SCNNode()
+        ambientLightNode.light = SCNLight()
+        ambientLightNode.light?.type = .ambient
+        ambientLightNode.light?.color = NSColor(calibratedWhite: 0.8, alpha: 1.0)
+        scene.rootNode.addChildNode(ambientLightNode)
+
+        let omniLight = SCNNode()
+        omniLight.light = SCNLight()
+        omniLight.light?.type = .omni
+        omniLight.light?.color = NSColor.white
+        omniLight.position = SCNVector3(5, 5, 5)
+        scene.rootNode.addChildNode(omniLight)
+
+        if let node = loadShuttleModelNode() {
+            shuttleNode = node
+            scene.rootNode.addChildNode(node)
+            node.position = SCNVector3(100, 100, 100)
+        } else {
+            NSLog("Could not load shuttle model.")
+        }
+
+        scnView.scene = scene
+        addSubview(scnView)
+        shuttleView = scnView
+    }
+
+    private func layoutShuttleView() {
+        guard let shuttleView else { return }
+        shuttleView.frame = bounds
     }
 
     private func layoutModelView() {
@@ -266,6 +328,51 @@ private final class VisualizerView: NSView {
         return container
     }
 
+    private func loadShuttleModelNode() -> SCNNode? {
+        let preferredModelFiles = [
+            "Meshy_AI_shuttle_0227101350_texture.usdz",
+            "Meshy_AI_shuttle_0227101350_texture.usda",
+            "Meshy_AI_shuttle_0227101350_texture.glb"
+        ]
+
+        guard let modelURL = locateModelAsset(preferredNames: preferredModelFiles) else {
+            return nil
+        }
+
+        guard let modelScene = loadModelScene(from: modelURL) else {
+            NSLog("Model found at \(modelURL.path), but SceneKit could not parse it.")
+            return nil
+        }
+        NSLog("Loaded shuttle model from \(modelURL.path)")
+
+        let container = SCNNode()
+        if modelScene.rootNode.childNodes.isEmpty, modelScene.rootNode.geometry != nil {
+            container.addChildNode(modelScene.rootNode.clone())
+        } else {
+            for child in modelScene.rootNode.childNodes {
+                container.addChildNode(child)
+            }
+        }
+
+        let (minBox, maxBox) = container.boundingBox
+        let size = SCNVector3(maxBox.x - minBox.x, maxBox.y - minBox.y, maxBox.z - minBox.z)
+        let maxDimension = max(size.x, max(size.y, size.z))
+        if maxDimension > 0 {
+            let targetSize: CGFloat = 3.5
+            let scale = targetSize / maxDimension
+            container.scale = SCNVector3(scale, scale, scale)
+            let centerX = (minBox.x + maxBox.x) * 0.5
+            let centerY = (minBox.y + maxBox.y) * 0.5
+            let centerZ = (minBox.z + maxBox.z) * 0.5
+            container.pivot = SCNMatrix4MakeTranslation(centerX, centerY, centerZ)
+        }
+        
+        let wrapper = SCNNode()
+        wrapper.addChildNode(container)
+        
+        return wrapper
+    }
+
     private func loadModelScene(from url: URL) -> SCNScene? {
         if let sceneSource = SCNSceneSource(url: url, options: nil),
            let sceneFromSource = sceneSource.scene(options: nil) {
@@ -364,8 +471,43 @@ private final class VisualizerView: NSView {
 
         updateStars()
         updateModelMotion()
+        updateShuttleMotion(dt: 1.0 / 60.0)
 
         needsDisplay = true
+    }
+
+    private func updateShuttleMotion(dt: TimeInterval) {
+        guard let shuttleNode else { return }
+        
+        if !isShuttleFlying {
+            shuttleWaitTimer -= dt
+            if shuttleWaitTimer <= 0 {
+                isShuttleFlying = true
+                shuttleFlightTimer = 0
+                shuttleFlightDuration = TimeInterval.random(in: 15.0...25.0)
+                shuttleStartY = CGFloat.random(in: -3.0...4.0)
+                shuttleStartZ = CGFloat.random(in: -2.0...4.0)
+                
+                shuttleNode.position = SCNVector3(12, shuttleStartY, shuttleStartZ)
+                // Next wait timer is 10 mins (600s) +/- 2 mins -> 480 to 720
+                shuttleWaitTimer = TimeInterval.random(in: 480...720)
+            }
+        } else {
+            shuttleFlightTimer += dt
+            let progress = CGFloat(shuttleFlightTimer / shuttleFlightDuration)
+            
+            if progress >= 1.0 {
+                isShuttleFlying = false
+                shuttleNode.position = SCNVector3(100, 100, 100)
+            } else {
+                let currentX = 12.0 - (24.0 * progress) // 12 to -12
+                let hover = sin(phase * 1.5) * 0.15
+                shuttleNode.position = SCNVector3(currentX, shuttleStartY + hover, shuttleStartZ)
+                
+                shuttleNode.eulerAngles.z = cos(phase * 1.5) * 0.05
+                shuttleNode.eulerAngles.x = sin(phase * 0.8) * 0.05
+            }
+        }
     }
 
     private func updateModelMotion() {
