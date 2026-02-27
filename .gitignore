@@ -1,0 +1,7 @@
+.build/
+.swiftpm/
+.swiftpm-cache/
+Package.resolved
+.DS_Store
+dist/
+/marble_youth.glb
