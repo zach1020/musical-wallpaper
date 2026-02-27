@@ -132,8 +132,8 @@ private final class VisualizerView: NSView {
         let previousSmoothed = smoothedAudio
         smoothedAudio = (smoothedAudio * 0.82) + (audioLevel * 0.18)
         let transient = max(0, audioLevel - previousSmoothed)
-        let trigger = max(0, transient - 0.035) * 8.0
-        beatPulse = max(beatPulse * 0.84, min(1, trigger))
+        let trigger = max(0, transient - 0.015) * 16.0
+        beatPulse = max(beatPulse * 0.88, min(1, trigger))
 
         energy = max(smoothedAudio, max(beatPulse * 0.95, energy * 0.90))
     }
@@ -467,9 +467,8 @@ private final class VisualizerView: NSView {
             colorShift -= 1
         }
         energy *= 0.972
-        beatPulse *= 0.90
-
-        let waveformSample = min(1, max(0.02, (audioLevel * 0.74) + (energy * 0.22) + (beatPulse * 0.55)))
+        beatPulse *= 0.93
+        let waveformSample = min(1, max(0.02, (audioLevel * 0.74) + (energy * 0.22) + (beatPulse * 0.85)))
         waveformHistory.append(waveformSample)
         if waveformHistory.count > 260 {
             waveformHistory.removeFirst(waveformHistory.count - 260)
@@ -528,9 +527,9 @@ private final class VisualizerView: NSView {
         }
 
         // Add a subtle beat bounce when the track gets punchy.
-        let jumpTrigger = max(0, beatPulse - 0.20)
+        let jumpTrigger = max(0, beatPulse - 0.10)
         if jumpTrigger > 0 {
-            modelJumpVelocity += jumpTrigger * 0.070
+            modelJumpVelocity += jumpTrigger * 0.13
         }
 
         modelJumpVelocity -= 0.006
@@ -623,8 +622,8 @@ private final class VisualizerView: NSView {
 
         let rect = bounds
         let center = CGPoint(x: rect.midX, y: rect.midY + (rect.height * 0.03))
-        let zoomMultiplier = 1.0 + (audioLevel * 2.3) + (beatPulse * 5.6)
-        let beatPush = 3 + (beatPulse * 34)
+        let zoomMultiplier = 1.0 + (audioLevel * 2.3) + (beatPulse * 10.0)
+        let beatPush = 3 + (beatPulse * 60)
         let dt: CGFloat = 1.0 / 60.0
         let margin = max(rect.width, rect.height) * 0.18
 
@@ -682,7 +681,7 @@ private final class VisualizerView: NSView {
         let bottom = neonColor(
             offset: 0.48,
             saturation: 0.78,
-            brightness: 0.05 + (beatPulse * 0.04),
+            brightness: 0.05 + (beatPulse * 0.12),
             alpha: backgroundOpacity
         )
 
@@ -704,13 +703,13 @@ private final class VisualizerView: NSView {
         )
 
         context.setBlendMode(.screen)
-        let glowRadius = max(rect.width, rect.height) * (0.45 + (beatPulse * 0.12))
+        let glowRadius = max(rect.width, rect.height) * (0.45 + (beatPulse * 0.25))
         context.setFillColor(
             neonColor(
                 offset: 0.76,
                 saturation: 0.88,
                 brightness: 1.0,
-                alpha: (0.05 + (energy * 0.08) + (beatPulse * 0.06)) * backgroundOpacity
+                alpha: (0.05 + (energy * 0.08) + (beatPulse * 0.18)) * backgroundOpacity
             ).cgColor
         )
         context.fillEllipse(in: CGRect(
@@ -726,7 +725,7 @@ private final class VisualizerView: NSView {
                 offset: 0.22,
                 saturation: 0.85,
                 brightness: 1.0,
-                alpha: (0.05 + (beatPulse * 0.08)) * backgroundOpacity
+                alpha: (0.05 + (beatPulse * 0.22)) * backgroundOpacity
             ).cgColor
         )
         context.fillEllipse(in: CGRect(
@@ -766,7 +765,7 @@ private final class VisualizerView: NSView {
                 offset: 0.04,
                 saturation: 0.84,
                 brightness: 1.0,
-                alpha: (0.22 + (energy * 0.14) + (beatPulse * 0.18)) * backgroundOpacity
+                alpha: (0.22 + (energy * 0.14) + (beatPulse * 0.38)) * backgroundOpacity
             ).cgColor
         )
         context.fillEllipse(in: sunRect)
@@ -798,7 +797,7 @@ private final class VisualizerView: NSView {
             return
         }
 
-        let pulse = 0.55 + (audioLevel * 0.70) + (beatPulse * 1.30)
+        let pulse = 0.55 + (audioLevel * 0.70) + (beatPulse * 2.20)
 
         context.saveGState()
         context.setBlendMode(.screen)
@@ -810,13 +809,13 @@ private final class VisualizerView: NSView {
             let glowIntensity = (0.55 + pulse) * twinkle * star.depth
 
             let coreSize = star.size * (0.88 + (glowIntensity * 0.45))
-            let trailLength = 3 + (star.depth * 12) + (audioLevel * 10) + (beatPulse * 28)
+            let trailLength = 3 + (star.depth * 12) + (audioLevel * 10) + (beatPulse * 50)
             let trailStart = CGPoint(
                 x: star.position.x - (direction.x * trailLength),
                 y: star.position.y - (direction.y * trailLength)
             )
 
-            let starAlpha = min(1, (0.22 + (star.brightness * 0.54) + (beatPulse * 0.24)) * twinkle)
+            let starAlpha = min(1, (0.22 + (star.brightness * 0.54) + (beatPulse * 0.50)) * twinkle)
             let starColor = neonColor(
                 offset: 0.10 + star.hueOffset,
                 saturation: 0.54 + (star.depth * 0.32),
@@ -827,7 +826,7 @@ private final class VisualizerView: NSView {
             context.saveGState()
             context.setShadow(
                 offset: .zero,
-                blur: (4 + (star.size * 4)) + (audioLevel * 9) + (beatPulse * 22),
+                blur: (4 + (star.size * 4)) + (audioLevel * 9) + (beatPulse * 40),
                 color: starColor.withAlphaComponent(min(1, starAlpha * 0.92)).cgColor
             )
             context.setStrokeColor(starColor.cgColor)
@@ -852,7 +851,7 @@ private final class VisualizerView: NSView {
     private func drawVaporwaveGrid(in context: CGContext) {
         let rect = bounds
         let horizonY = rect.minY + (rect.height * 0.32)
-        let warpStrength = 5 + (audioLevel * 18) + (beatPulse * 36)
+        let warpStrength = 5 + (audioLevel * 18) + (beatPulse * 70)
 
         context.saveGState()
         context.setBlendMode(.screen)
@@ -863,7 +862,7 @@ private final class VisualizerView: NSView {
             let t = CGFloat(i) / CGFloat(rowCount - 1)
             let eased = pow(t, 1.75)
             let baseY = horizonY - eased * (horizonY - rect.minY)
-            let alpha = (0.05 + ((1 - t) * 0.18) + (beatPulse * 0.11)) * backgroundOpacity
+            let alpha = (0.05 + ((1 - t) * 0.18) + (beatPulse * 0.28)) * backgroundOpacity
             let rowPath = CGMutablePath()
 
             for segment in 0...rowSegments {
@@ -923,7 +922,7 @@ private final class VisualizerView: NSView {
                     offset: 0.88 - (t * 0.22),
                     saturation: 0.88,
                     brightness: 1.0,
-                    alpha: (0.06 + (abs(t - 0.5) * 0.10) + (beatPulse * 0.12)) * backgroundOpacity
+                    alpha: (0.06 + (abs(t - 0.5) * 0.10) + (beatPulse * 0.28)) * backgroundOpacity
                 ).cgColor
             )
             context.setLineWidth(1.0)
@@ -1097,13 +1096,13 @@ private final class VisualizerView: NSView {
         let rect = bounds
         let center = CGPoint(x: rect.midX, y: rect.midY)
         let minRadius = min(rect.width, rect.height) * 0.09
-        let baseRadius = minRadius * (1.0 + (energy * 0.70) + (beatPulse * 1.55))
+        let baseRadius = minRadius * (1.0 + (energy * 0.70) + (beatPulse * 3.0))
 
         let fillColor = neonColor(
             offset: 0.04,
             saturation: 0.80,
             brightness: 1.0,
-            alpha: 0.18 + (energy * 0.09) + (beatPulse * 0.22)
+            alpha: 0.18 + (energy * 0.09) + (beatPulse * 0.45)
         )
         context.setFillColor(fillColor.cgColor)
         context.fillEllipse(in: CGRect(
@@ -1118,10 +1117,10 @@ private final class VisualizerView: NSView {
                 offset: 0.30,
                 saturation: 0.90,
                 brightness: 1.0,
-                alpha: 0.38 + (energy * 0.16) + (beatPulse * 0.28)
+                alpha: 0.38 + (energy * 0.16) + (beatPulse * 0.55)
             ).cgColor
         )
-        context.setLineWidth(1.8 + (audioLevel * 2.4) + (beatPulse * 3.0))
+        context.setLineWidth(1.8 + (audioLevel * 2.4) + (beatPulse * 6.0))
         context.strokeEllipse(in: CGRect(
             x: center.x - (baseRadius * 1.2),
             y: center.y - (baseRadius * 1.2),
@@ -1129,7 +1128,7 @@ private final class VisualizerView: NSView {
             height: baseRadius * 2.4
         ))
 
-        if beatPulse > 0.08 {
+        if beatPulse > 0.04 {
             context.setStrokeColor(
                 neonColor(
                     offset: 0.90,
@@ -1138,7 +1137,7 @@ private final class VisualizerView: NSView {
                     alpha: min(0.86, beatPulse + 0.12)
                 ).cgColor
             )
-            context.setLineWidth(2.0 + (beatPulse * 6.0))
+            context.setLineWidth(2.0 + (beatPulse * 12.0))
             context.strokeEllipse(in: CGRect(
                 x: center.x - (baseRadius * 1.55),
                 y: center.y - (baseRadius * 1.55),
@@ -1155,7 +1154,7 @@ private final class VisualizerView: NSView {
 
         let globeConfigs: [(radius: CGFloat, offsetX: CGFloat, offsetY: CGFloat, hue: CGFloat, alpha: CGFloat, speed: CGFloat, tilt: CGFloat)] = [
             (
-                radius: minDimension * (0.18 + (beatPulse * 0.03)),
+                radius: minDimension * (0.18 + (beatPulse * 0.08)),
                 offsetX: 0,
                 offsetY: 0,
                 hue: 0.34,
@@ -1271,7 +1270,7 @@ private final class VisualizerView: NSView {
         guard waveformHistory.count > 1 else { return }
 
         let baseline = rect.minY + (rect.height * 0.11)
-        let amplitude = rect.height * (0.024 + (audioLevel * 0.06) + (beatPulse * 0.16))
+        let amplitude = rect.height * (0.024 + (audioLevel * 0.06) + (beatPulse * 0.32))
 
         var points: [CGPoint] = []
         points.reserveCapacity(waveformHistory.count)
@@ -1298,7 +1297,7 @@ private final class VisualizerView: NSView {
                 offset: 0.26,
                 saturation: 0.85,
                 brightness: 1.0,
-                alpha: 0.08 + (audioLevel * 0.11) + (beatPulse * 0.15)
+                alpha: 0.08 + (audioLevel * 0.11) + (beatPulse * 0.35)
             ).cgColor
         )
         context.addPath(fillPath)
@@ -1316,18 +1315,18 @@ private final class VisualizerView: NSView {
         context.saveGState()
         context.setShadow(
             offset: .zero,
-            blur: 12 + (audioLevel * 10) + (beatPulse * 26),
+            blur: 12 + (audioLevel * 10) + (beatPulse * 50),
             color: neonColor(offset: 0.96, saturation: 0.88, brightness: 1.0, alpha: 0.80).cgColor
         )
         context.addPath(linePath)
         context.setStrokeColor(neonColor(offset: 0.92, saturation: 0.84, brightness: 1.0, alpha: 0.92).cgColor)
-        context.setLineWidth(2.0 + (audioLevel * 1.8) + (beatPulse * 4.4))
+        context.setLineWidth(2.0 + (audioLevel * 1.8) + (beatPulse * 9.0))
         context.strokePath()
         context.restoreGState()
 
         context.addPath(linePath)
         context.setStrokeColor(neonColor(offset: 0.36, saturation: 0.90, brightness: 1.0, alpha: 0.98).cgColor)
-        context.setLineWidth(1.2 + (audioLevel * 1.1) + (beatPulse * 1.8))
+        context.setLineWidth(1.2 + (audioLevel * 1.1) + (beatPulse * 4.0))
         context.strokePath()
     }
 
@@ -1432,7 +1431,7 @@ private final class VisualizerView: NSView {
             ]
             context.setShadow(
                 offset: .zero,
-                blur: 30 + (beatPulse * 26),
+                blur: 30 + (beatPulse * 55),
                 color: glowColor.cgColor
             )
             (charText as NSString).draw(at: CGPoint(x: x, y: y), withAttributes: glowAttrs)
@@ -1443,7 +1442,7 @@ private final class VisualizerView: NSView {
                 .foregroundColor: NSColor.white
             ]
             context.saveGState()
-            context.setShadow(offset: .zero, blur: 9 + (beatPulse * 6), color: glowColor.cgColor)
+            context.setShadow(offset: .zero, blur: 9 + (beatPulse * 18), color: glowColor.cgColor)
             (charText as NSString).draw(at: CGPoint(x: x, y: y), withAttributes: coreAttrs)
             context.restoreGState()
 
@@ -1526,6 +1525,7 @@ private final class VisualizerView: NSView {
             ))
         }
     }
+
 }
 
 private final class WallpaperController {
@@ -2029,7 +2029,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         backgroundModeMenuItem.title = "Background: \(backgroundMode.rawValue)"
         overlayToggleMenuItem.title = backgroundMode == .overlay ? "Disable Desktop Overlay" : "Enable Desktop Overlay"
         overlayToggleMenuItem.state = backgroundMode == .overlay ? .on : .off
-        
+
         shuttleToggleMenuItem.title = isShuttleEnabled ? "Disable Spaceship Flight" : "Enable Spaceship Flight"
         shuttleToggleMenuItem.state = isShuttleEnabled ? .on : .off
     }
